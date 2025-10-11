@@ -1,82 +1,80 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import '../models/habit_model.dart';
 
-class DBHelper {
+class DatabaseHelper {
+  static final DatabaseHelper _instance = DatabaseHelper._internal();
+  factory DatabaseHelper() => _instance;
+  DatabaseHelper._internal();
+
   static Database? _database;
 
-  // Database name and version
-  static const String _dbName = 'habit_tracker.db';
-  static const int _dbVersion = 1;
-
-  // Table name and columns
-  static const String tableHabits = 'habits';
-  static const String columnId = 'id';
-  static const String columnName = 'name';
-  static const String columnCompleted = 'completed';
-
-  // Singleton pattern
-  DBHelper._privateConstructor();
-  static final DBHelper instance = DBHelper._privateConstructor();
-
-  // Get database instance
   Future<Database> get database async {
     if (_database != null) return _database!;
     _database = await _initDB();
     return _database!;
   }
 
-  // Initialize database
   Future<Database> _initDB() async {
-    String path = join(await getDatabasesPath(), _dbName);
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, 'habits.db');
+
     return await openDatabase(
       path,
-      version: _dbVersion,
+      version: 1,
       onCreate: _onCreate,
     );
   }
 
-  // Create tables
-  Future _onCreate(Database db, int version) async {
+  Future<void> _onCreate(Database db, int version) async {
     await db.execute('''
-      CREATE TABLE $tableHabits (
-        $columnId INTEGER PRIMARY KEY AUTOINCREMENT,
-        $columnName TEXT NOT NULL,
-        $columnCompleted INTEGER NOT NULL DEFAULT 0
+      CREATE TABLE habits (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        isCompleted INTEGER NOT NULL
       )
     ''');
   }
 
-  // Insert a new habit
-  Future<int> insertHabit(Map<String, dynamic> habit) async {
-    Database db = await instance.database;
-    return await db.insert(tableHabits, habit);
+  // ✅ Get all habits
+  Future<List<Habit>> getHabits() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query('habits');
+
+    return List.generate(maps.length, (i) {
+      return Habit(
+        id: maps[i]['id'],
+        name: maps[i]['name'],
+        isCompleted: maps[i]['isCompleted'] == 1,
+      );
+    });
   }
 
-  // Get all habits
-  Future<List<Map<String, dynamic>>> getHabits() async {
-    Database db = await instance.database;
-    return await db.query(tableHabits);
+  // ✅ Insert new habit
+  Future<int> insertHabit(Habit habit) async {
+    final db = await database;
+    return await db.insert('habits', habit.toMap());
   }
 
-  // Update habit (toggle completion)
-  Future<int> updateHabit(Map<String, dynamic> habit) async {
-    Database db = await instance.database;
-    int id = habit[columnId];
+  // ✅ Update existing habit
+  Future<int> updateHabit(Habit habit) async {
+    final db = await database;
     return await db.update(
-      tableHabits,
-      habit,
-      where: '$columnId = ?',
-      whereArgs: [id],
+      'habits',
+      habit.toMap(),
+      where: 'id = ?',
+      whereArgs: [habit.id],
     );
   }
 
-  // Delete habit
+  // ✅ Delete habit by ID
   Future<int> deleteHabit(int id) async {
-    Database db = await instance.database;
+    final db = await database;
     return await db.delete(
-      tableHabits,
-      where: '$columnId = ?',
+      'habits',
+      where: 'id = ?',
       whereArgs: [id],
     );
   }
 }
+
